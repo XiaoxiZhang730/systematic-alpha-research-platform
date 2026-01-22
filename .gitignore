@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data & experiment outputs
+data/
+runs/
+
+# Virtual env
+.venv/
+.env
