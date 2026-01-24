@@ -28,7 +28,7 @@ class Config:
     # Cross-validation / randomness
     # ======================
     n_splits: int = 5
-    seed: int = 42   # ✅ 给 lasso / rf / gbm / mlp 用
+    seed: int = 42  
 
     # ======================
     # Linear models (Ridge / Lasso)
@@ -44,7 +44,7 @@ class Config:
     # ======================
     n_estimators: int = 200
     max_depth: Optional[int] = None
-    learning_rate: float = 0.05  # GBM 用
+    learning_rate: float = 0.05  # GBM 
 
     # ======================
     # Deep learning (MLP)

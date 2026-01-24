@@ -60,174 +60,194 @@ import pandas as pd
 
 # ——— Helper Functions ——— #
 
-def rsi(series: pd.Series, window: int = 14) -> pd.Series:
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = (-delta).clip(lower=0)
-    avg_gain = gain.rolling(window).mean()
-    avg_loss = loss.rolling(window).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+# def rsi(series: pd.Series, window: int = 14) -> pd.Series:
+#     delta = series.diff()
+#     gain = delta.clip(lower=0)
+#     loss = (-delta).clip(lower=0)
+#     avg_gain = gain.rolling(window).mean()
+#     avg_loss = loss.rolling(window).mean()
+#     rs = avg_gain / avg_loss
+#     return 100 - (100 / (1 + rs))
 
-def stochastic_oscillator(high, low, close, window=14):
-    lowest_low = low.rolling(window).min()
-    highest_high = high.rolling(window).max()
-    percent_k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
-    percent_d = percent_k.rolling(3).mean()
-    return percent_k, percent_d
+# def stochastic_oscillator(high, low, close, window=14):
+#     lowest_low = low.rolling(window).min()
+#     highest_high = high.rolling(window).max()
+#     percent_k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+#     percent_d = percent_k.rolling(3).mean()
+#     return percent_k, percent_d
 
-def truerange(df):
-    high_low = df["High"] - df["Low"]
-    high_pc  = (df["High"] - df["Close"].shift()).abs()
-    low_pc   = (df["Low"] - df["Close"].shift()).abs()
-    return pd.concat([high_low, high_pc, low_pc], axis=1).max(axis=1)
+# def truerange(df):
+#     high_low = df["High"] - df["Low"]
+#     high_pc  = (df["High"] - df["Close"].shift()).abs()
+#     low_pc   = (df["Low"] - df["Close"].shift()).abs()
+#     return pd.concat([high_low, high_pc, low_pc], axis=1).max(axis=1)
 
-def cs_zscore(df, cols):
-    return df.groupby("date")[cols].transform(
-        lambda x: (x - x.mean()) / x.std(ddof=0)
-    )
+# def cs_zscore(df, cols):
+#     return df.groupby("date")[cols].transform(
+#         lambda x: (x - x.mean()) / x.std(ddof=0)
+#     )
 
 
-# ——— Main Feature Builder ——— #
+# # ——— Main Feature Builder ——— #
 
-def make_features(panel: pd.DataFrame, market: str) -> pd.DataFrame:
-    df = panel.copy()
-    g = df.groupby(level="ticker", group_keys=False)
-    initial_cols = set(df.columns)
+# def make_features(panel: pd.DataFrame, market: str) -> pd.DataFrame:
+#     df = panel.copy()
+#     g = df.groupby(level="ticker", group_keys=False)
+#     initial_cols = set(df.columns)
 
-    # —— I. Raw OHLCV ——
-    df["Open"]  = df["Open"]
-    df["High"]  = df["High"]
-    df["Low"]   = df["Low"]
-    df["Close"] = df["Close"]
-    df["Volume"] = df["Volume"]
+#     # —— I. Raw OHLCV ——
+#     df["Open"]  = df["Open"]
+#     df["High"]  = df["High"]
+#     df["Low"]   = df["Low"]
+#     df["Close"] = df["Close"]
+#     df["Volume"] = df["Volume"]
 
-    # Log price for convenience
-    df["log_price"] = np.log(df["Close"])
+#     # Log price for convenience
+#     df["log_price"] = np.log(df["Close"])
 
-    # —— Log Returns ——
-    df["log_return_1d"] = g["log_price"].apply(lambda s: s.diff())
-    df["mom_5d"] = g["log_return_1d"].apply(lambda s: s.rolling(5).sum())
-    df["vol_5d"] = g["log_return_1d"].apply(lambda s: s.rolling(5).std())
-    df["hl_range"] = (df["High"] - df["Low"]) / df["price"]
-    df["vol_ratio_5d"] = g["Volume"].apply(lambda s: s / s.rolling(5).mean())
-    dvol = g["Volume"].apply(lambda s: np.log(s).diff())
-    df["pv_corr_10d"] = g.apply(lambda x: x["log_return_1d"].rolling(10).corr(dvol.loc[x.index]))
-    ma_10 = g["price"].apply(lambda s: s.rolling(10).mean())
-    df["ma_gap_10d"] = (df["price"] - ma_10) / ma_10
-    df["rsi_14d"] = g["price"].apply(lambda s: rsi(s, 14))
+#     # —— Log Returns ——
+#     df["log_return_1d"] = g["log_price"].apply(lambda s: s.diff())
+#     df["mom_5d"] = g["log_return_1d"].apply(lambda s: s.rolling(5).sum())
+#     df["vol_5d"] = g["log_return_1d"].apply(lambda s: s.rolling(5).std())
+#     df["hl_range"] = (df["High"] - df["Low"]) / df["price"]
+#     df["vol_ratio_5d"] = g["Volume"].apply(lambda s: s / s.rolling(5).mean())
+#     dvol = g["Volume"].apply(lambda s: np.log(s).diff())
+#     df["pv_corr_10d"] = g.apply(lambda x: x["log_return_1d"].rolling(10).corr(dvol.loc[x.index]))
+#     ma_10 = g["price"].apply(lambda s: s.rolling(10).mean())
+#     df["ma_gap_10d"] = (df["price"] - ma_10) / ma_10
+#     df["rsi_14d"] = g["price"].apply(lambda s: rsi(s, 14))
 
-    # —— II. Trend Indicators ——
-    # SMA & EMA windows
-    sma_windows = [5, 10, 20, 50, 200]
-    ema_windows = sma_windows.copy()
+#     # —— II. Trend Indicators ——
+#     # SMA & EMA windows
+#     sma_windows = [5, 10, 20, 50, 200]
+#     ema_windows = sma_windows.copy()
 
-    for w in sma_windows:
-        df[f"SMA_{w}"] = g["Close"].apply(lambda s: s.rolling(w).mean())
+#     for w in sma_windows:
+#         df[f"SMA_{w}"] = g["Close"].apply(lambda s: s.rolling(w).mean())
 
-    for w in ema_windows:
-        df[f"EMA_{w}"] = g["Close"].apply(lambda s: s.ewm(span=w).mean())
+#     for w in ema_windows:
+#         df[f"EMA_{w}"] = g["Close"].apply(lambda s: s.ewm(span=w).mean())
 
-    # MACD
-    ema12 = g["Close"].apply(lambda s: s.ewm(span=12).mean())
-    ema26 = g["Close"].apply(lambda s: s.ewm(span=26).mean())
-    df["MACD"] = ema12 - ema26
-    df["MACD_signal"] = df["MACD"].groupby(level="ticker", group_keys=False).apply(lambda s: s.ewm(span=9).mean())
-    df["MACD_hist"] = df["MACD"] - df["MACD_signal"]
+#     # MACD
+#     ema12 = g["Close"].apply(lambda s: s.ewm(span=12).mean())
+#     ema26 = g["Close"].apply(lambda s: s.ewm(span=26).mean())
+#     df["MACD"] = ema12 - ema26
+#     df["MACD_signal"] = df["MACD"].groupby(level="ticker", group_keys=False).apply(lambda s: s.ewm(span=9).mean())
+#     df["MACD_hist"] = df["MACD"] - df["MACD_signal"]
 
-    # Parabolic SAR
-    df["Parabolic_SAR"] = g.apply(
-        lambda x: pd.Series(x["Low"].rolling(5).min(), index=x.index)
-    )
+#     # Parabolic SAR
+#     df["Parabolic_SAR"] = g.apply(
+#         lambda x: pd.Series(x["Low"].rolling(5).min(), index=x.index)
+#     )
 
-    # ADX
-    # Note: Full ADX is a bit involved; use built-in or simplified proxy
-    df["ADX"] = g["Close"].apply(lambda s: s.rolling(14).apply(lambda x: np.nan))
+#     # ADX
+#     # Note: Full ADX is a bit involved; use built-in or simplified proxy
+#     df["ADX"] = g["Close"].apply(lambda s: s.rolling(14).apply(lambda x: np.nan))
 
-    # —— III. Momentum Indicators ——
-    # RSI
-    for w in [7, 14, 21]:
-        df[f"RSI_{w}"] = g["Close"].apply(lambda s: rsi(s, w))
+#     # —— III. Momentum Indicators ——
+#     # RSI
+#     for w in [7, 14, 21]:
+#         df[f"RSI_{w}"] = g["Close"].apply(lambda s: rsi(s, w))
 
-    # # Stochastic
-    # df["SO_%K"], df["SO_%D"] = zip(*g.apply(
-    #     lambda x: stochastic_oscillator(x["High"], x["Low"], x["Close"])) )
+#     # # Stochastic
+#     # df["SO_%K"], df["SO_%D"] = zip(*g.apply(
+#     #     lambda x: stochastic_oscillator(x["High"], x["Low"], x["Close"])) )
 
-    # ROC
-    for w in [5, 10, 20]:
-        df[f"ROC_{w}"] = g["Close"].apply(lambda s: s.pct_change(w))
+#     # ROC
+#     for w in [5, 10, 20]:
+#         df[f"ROC_{w}"] = g["Close"].apply(lambda s: s.pct_change(w))
 
-    df["Williams_%R"] = g.apply(lambda x: (x["High"].rolling(14).max() - x["Close"]) /
-                                (x["High"].rolling(14).max() - x["Low"].rolling(14).min()) * -100)
+#     df["Williams_%R"] = g.apply(lambda x: (x["High"].rolling(14).max() - x["Close"]) /
+#                                 (x["High"].rolling(14).max() - x["Low"].rolling(14).min()) * -100)
 
-    df["CCI"] = g.apply(lambda x: (x["Close"] - x["Close"].rolling(20).mean()) /
-                        (0.015 * x["Close"].rolling(20).std()))
+#     df["CCI"] = g.apply(lambda x: (x["Close"] - x["Close"].rolling(20).mean()) /
+#                         (0.015 * x["Close"].rolling(20).std()))
 
-    df["Momentum"] = g["Close"].apply(lambda s: s.diff(5))
+#     df["Momentum"] = g["Close"].apply(lambda s: s.diff(5))
 
-    df["MFI"] = g.apply(lambda x: rsi(x["Volume"] * ((x["High"] + x["Low"] + x["Close"]) / 3), 14))
+#     df["MFI"] = g.apply(lambda x: rsi(x["Volume"] * ((x["High"] + x["Low"] + x["Close"]) / 3), 14))
 
-    # TRIX
-    df["TRIX"] = g["Close"].apply(lambda s: s.ewm(span=15).mean().pct_change())
+#     # TRIX
+#     df["TRIX"] = g["Close"].apply(lambda s: s.ewm(span=15).mean().pct_change())
 
-    df["Ultimate_Osc"] = g.apply(lambda x: np.nan)  # placeholder
+#     df["Ultimate_Osc"] = g.apply(lambda x: np.nan)  # placeholder
 
-    # —— IV. Volatility ——
-    df["BB_upper"] = g["Close"].apply(lambda s: s.rolling(20).mean() + 2 * s.rolling(20).std())
-    df["BB_lower"] = g["Close"].apply(lambda s: s.rolling(20).mean() - 2 * s.rolling(20).std())
-    df["BB_width"] = df["BB_upper"] - df["BB_lower"]
+#     # —— IV. Volatility ——
+#     df["BB_upper"] = g["Close"].apply(lambda s: s.rolling(20).mean() + 2 * s.rolling(20).std())
+#     df["BB_lower"] = g["Close"].apply(lambda s: s.rolling(20).mean() - 2 * s.rolling(20).std())
+#     df["BB_width"] = df["BB_upper"] - df["BB_lower"]
 
-    df["ATR"] = g.apply(lambda x: truerange(x).rolling(14).mean())
-    df["STDDEV_20"] = g["Close"].apply(lambda s: s.rolling(20).std())
+#     df["ATR"] = g.apply(lambda x: truerange(x).rolling(14).mean())
+#     df["STDDEV_20"] = g["Close"].apply(lambda s: s.rolling(20).std())
 
-    # df["VIX"] = np.nan
-    # df["VVIX"] = np.nan
-    # df["Garman_Klass"] = np.nan
-    # df["Parkinson"] = np.nan
-    # df["RVI"] = np.nan
+#     # df["VIX"] = np.nan
+#     # df["VVIX"] = np.nan
+#     # df["Garman_Klass"] = np.nan
+#     # df["Parkinson"] = np.nan
+#     # df["RVI"] = np.nan
 
-    # —— V. Volume Indicators ——
-    df["OBV"] = g.apply(lambda x: (np.sign(x["Close"].diff()) * x["Volume"]).fillna(0).cumsum())
-    # df["CMF"] = np.nan
-    df["VWAP"] = g.apply(lambda x: (x["Close"] * x["Volume"]).cumsum() / x["Volume"].cumsum())
-    df["Volume_ROC"] = g["Volume"].apply(lambda s: s.pct_change())
-    df["Force_Index"] = g.apply(lambda x: x["Close"].diff() * x["Volume"])
-    # df["ADL"] = np.nan
-    # df["Ease_of_Movement"] = np.nan
-    # df["Volume_Oscillator"] = np.nan
-    # df["NVI"] = np.nan
-    # df["PVI"] = np.nan
+#     # —— V. Volume Indicators ——
+#     df["OBV"] = g.apply(lambda x: (np.sign(x["Close"].diff()) * x["Volume"]).fillna(0).cumsum())
+#     # df["CMF"] = np.nan
+#     df["VWAP"] = g.apply(lambda x: (x["Close"] * x["Volume"]).cumsum() / x["Volume"].cumsum())
+#     df["Volume_ROC"] = g["Volume"].apply(lambda s: s.pct_change())
+#     df["Force_Index"] = g.apply(lambda x: x["Close"].diff() * x["Volume"])
+#     # df["ADL"] = np.nan
+#     # df["Ease_of_Movement"] = np.nan
+#     # df["Volume_Oscillator"] = np.nan
+#     # df["NVI"] = np.nan
+#     # df["PVI"] = np.nan
 
-    # —— VI. Lag Features ——
-    for i in range(1, 6):
-        df[f"Close_lag_{i}"] = g["Close"].apply(lambda s: s.shift(i))
-        df[f"Volume_lag_{i}"] = g["Volume"].apply(lambda s: s.shift(i))
-        df[f"Return_lag_{i}"] = g["log_return_1d"].apply(lambda s: s.shift(i))
+#     # —— VI. Lag Features ——
+#     for i in range(1, 6):
+#         df[f"Close_lag_{i}"] = g["Close"].apply(lambda s: s.shift(i))
+#         df[f"Volume_lag_{i}"] = g["Volume"].apply(lambda s: s.shift(i))
+#         df[f"Return_lag_{i}"] = g["log_return_1d"].apply(lambda s: s.shift(i))
     
-    # feature_cols = list(set(df.columns) - initial_cols)
-    # df[feature_cols] = cs_zscore(df, feature_cols)
+#     # feature_cols = list(set(df.columns) - initial_cols)
+#     # df[feature_cols] = cs_zscore(df, feature_cols)
 
-    return df
+#     return df
 
 
 
-def clean_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop columns that are all NaN."""
-    return df.dropna(axis=1, how="all")
+# def clean_features(df: pd.DataFrame) -> pd.DataFrame:
+#     """Drop columns that are all NaN."""
+#     return df.dropna(axis=1, how="all")
 
-# def add_target(df: pd.DataFrame, target_col: str = "target") -> pd.DataFrame:
-#     df = df.copy()
-#     df[target_col] = df.groupby(level="ticker", group_keys=False)["log_return_1d"].shift(-1)
-#     return df.dropna(subset=[target_col])
+# # def add_target(df: pd.DataFrame, target_col: str = "target") -> pd.DataFrame:
+# #     df = df.copy()
+# #     df[target_col] = df.groupby(level="ticker", group_keys=False)["log_return_1d"].shift(-1)
+# #     return df.dropna(subset=[target_col])
+
+# # def add_target(df: pd.DataFrame, window: int = 21, target_col: str = "target") -> pd.DataFrame:
+# #     """
+# #     Add a forward-looking target: cumulative log return over the next `window` days.
+
+# #     Assumes df has MultiIndex: ['date', 'ticker'] and 'log_return_1d' column.
+# #     """
+# #     df = df.copy()
+
+# #     df[target_col] = (
+# #         df.groupby("ticker", group_keys=False)["log_return_1d"]
+# #         .rolling(window)
+# #         .sum()
+# #         .shift(-window)
+# #         .reset_index(level=0, drop=True)
+# #     )
+
+# #     return df.dropna(subset=[target_col])
 
 # def add_target(df: pd.DataFrame, window: int = 21, target_col: str = "target") -> pd.DataFrame:
 #     """
-#     Add a forward-looking target: cumulative log return over the next `window` days.
+#     Add a forward-looking target: cumulative log return over the next `window` days,
+#     then cross-sectionally demeaned by date.
 
 #     Assumes df has MultiIndex: ['date', 'ticker'] and 'log_return_1d' column.
 #     """
 #     df = df.copy()
 
+#     # Step 1: Compute forward-looking cumulative log return over next `window` days
 #     df[target_col] = (
 #         df.groupby("ticker", group_keys=False)["log_return_1d"]
 #         .rolling(window)
@@ -236,48 +256,176 @@ def clean_features(df: pd.DataFrame) -> pd.DataFrame:
 #         .reset_index(level=0, drop=True)
 #     )
 
-#     return df.dropna(subset=[target_col])
+#     # Step 2: Drop NaNs (incomplete forward returns)
+#     df = df.dropna(subset=[target_col])
+
+#     # # Step 3: Cross-sectional demeaning by date
+#     # df[target_col] = (
+#     #     df.groupby("date")[target_col]
+#     #     .transform(lambda x: x - x.mean())
+#     # )
+
+#     return df
+
+# def split_by_date(panel: pd.DataFrame, split_date: pd.Timestamp):
+#     dates = pd.to_datetime(panel.index.get_level_values("date"))
+#     train = panel.loc[dates <= split_date].copy()
+#     test  = panel.loc[dates >  split_date].copy()
+
+#     # Add a check to avoid empty train or test
+#     if train.empty:
+#         raise ValueError("Training set is empty. Consider using an earlier split_date.")
+#     if test.empty:
+#         raise ValueError("Test set is empty. Consider using a later split_date.")
+
+#     return train, test
+
+
+
+def rsi(series: pd.Series, window: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+    avg_gain = gain.ewm(span=window, adjust=False).mean()
+    avg_loss = loss.ewm(span=window, adjust=False).mean()
+    rs = avg_gain / (avg_loss + 1e-10)
+    return 100 - (100 / (1 + rs))
+
+def truerange(df):
+    high_low = df["High"] - df["Low"]
+    high_pc = (df["High"] - df["Close"].shift()).abs()
+    low_pc = (df["Low"] - df["Close"].shift()).abs()
+    return pd.concat([high_low, high_pc, low_pc], axis=1).max(axis=1)
+
+def make_features(panel: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean feature engineering with:
+    - No data leakage
+    - Cross-sectional normalization
+    - Orthogonal features
+    """
+    df = panel.copy()
+    g = df.groupby(level="ticker", group_keys=False)
+    
+    # Base calculations (not features themselves)
+    df["price"] = df["Close"]
+    df["log_price"] = np.log(df["Close"])
+    df["ret_1d"] = g["log_price"].diff(1)
+    
+    # ============ RETURN FEATURES ============
+    for d in [5, 10, 21, 63]:
+        df[f"ret_{d}d"] = g["log_price"].diff(d)
+    
+    # Momentum (12-1 month)
+    df["mom_12m_1m"] = g["log_price"].diff(252) - g["log_price"].diff(21)
+    
+    # ============ VOLATILITY FEATURES ============
+    df["vol_21d"] = g["ret_1d"].apply(lambda s: s.rolling(21, min_periods=15).std())
+    df["vol_63d"] = g["ret_1d"].apply(lambda s: s.rolling(63, min_periods=40).std())
+    df["vol_ratio"] = df["vol_21d"] / (df["vol_63d"] + 1e-10)
+    
+    # Idiosyncratic volatility (residual after market adjustment would be better)
+    df["vol_skew"] = g["ret_1d"].apply(lambda s: s.rolling(21).skew())
+    
+    # ============ MEAN REVERSION FEATURES ============
+    for d in [10, 21, 50]:
+        ma = g["price"].apply(lambda s: s.rolling(d).mean())
+        df[f"dist_ma_{d}d"] = (df["price"] - ma) / (ma + 1e-10)
+    
+    # ============ TECHNICAL FEATURES ============
+    df["rsi_14"] = g["price"].apply(lambda s: rsi(s, 14))
+    df["rsi_norm"] = (df["rsi_14"] - 50) / 50  # Normalize to ~[-1, 1]
+    
+    # MACD
+    ema_12 = g["price"].apply(lambda s: s.ewm(span=12).mean())
+    ema_26 = g["price"].apply(lambda s: s.ewm(span=26).mean())
+    df["macd_norm"] = (ema_12 - ema_26) / (df["price"] + 1e-10)
+    
+    # Bollinger Band position
+    ma_20 = g["price"].apply(lambda s: s.rolling(20).mean())
+    std_20 = g["price"].apply(lambda s: s.rolling(20).std())
+    df["bb_position"] = (df["price"] - ma_20) / (2 * std_20 + 1e-10)
+    
+    # ATR normalized
+    df["atr_14"] = g.apply(lambda x: truerange(x).rolling(14).mean())
+    df["atr_norm"] = df["atr_14"] / (df["price"] + 1e-10)
+    
+    # ============ VOLUME FEATURES ============
+    df["volume_ratio"] = df["Volume"] / (g["Volume"].apply(lambda s: s.rolling(21).mean()) + 1e-10)
+    df["log_dollar_vol"] = np.log(df["price"] * df["Volume"] + 1)
+    
+    # Price-volume correlation
+    df["pv_corr_21d"] = g.apply(
+        lambda x: x["ret_1d"].rolling(21).corr(x["Volume"].pct_change())
+    )
+    
+    # ============ DEFINE FEATURE COLUMNS ============
+    feature_cols = [
+        'ret_5d', 'ret_10d', 'ret_21d', 'ret_63d', 'mom_12m_1m',
+        'vol_21d', 'vol_63d', 'vol_ratio', 'vol_skew',
+        'dist_ma_10d', 'dist_ma_21d', 'dist_ma_50d',
+        'rsi_norm', 'macd_norm', 'bb_position', 'atr_norm',
+        'volume_ratio', 'log_dollar_vol', 'pv_corr_21d'
+    ]
+    
+    # ============ CROSS-SECTIONAL NORMALIZATION ============
+    # Use rank to handle outliers
+    for col in feature_cols:
+        if col in df.columns:
+            # Winsorize extreme values
+            df[col] = df.groupby("date")[col].transform(
+                lambda x: x.clip(x.quantile(0.01), x.quantile(0.99))
+            )
+            # Cross-sectional z-score
+            df[col] = df.groupby("date")[col].transform(
+                lambda x: (x - x.mean()) / (x.std() + 1e-8)
+            )
+    
+    return df
+
 
 def add_target(df: pd.DataFrame, window: int = 21, target_col: str = "target") -> pd.DataFrame:
     """
-    Add a forward-looking target: cumulative log return over the next `window` days,
-    then cross-sectionally demeaned by date.
-
-    Assumes df has MultiIndex: ['date', 'ticker'] and 'log_return_1d' column.
+    Forward-looking return with cross-sectional demeaning.
     """
     df = df.copy()
-
-    # Step 1: Compute forward-looking cumulative log return over next `window` days
+    
+    # Forward return: log(price_{t+window}) - log(price_t)
     df[target_col] = (
-        df.groupby("ticker", group_keys=False)["log_return_1d"]
-        .rolling(window)
-        .sum()
-        .shift(-window)
-        .reset_index(level=0, drop=True)
+        df.groupby("ticker", group_keys=False)["log_price"]
+        .apply(lambda s: s.shift(-window) - s)
     )
-
-    # Step 2: Drop NaNs (incomplete forward returns)
-    df = df.dropna(subset=[target_col])
-
-    # # Step 3: Cross-sectional demeaning by date
-    # df[target_col] = (
-    #     df.groupby("date")[target_col]
-    #     .transform(lambda x: x - x.mean())
-    # )
-
-    return df
-
-def split_by_date(panel: pd.DataFrame, split_date: pd.Timestamp):
-    dates = pd.to_datetime(panel.index.get_level_values("date"))
-    train = panel.loc[dates <= split_date].copy()
-    test  = panel.loc[dates >  split_date].copy()
-
-    # Add a check to avoid empty train or test
-    if train.empty:
-        raise ValueError("Training set is empty. Consider using an earlier split_date.")
-    if test.empty:
-        raise ValueError("Test set is empty. Consider using a later split_date.")
-
-    return train, test
+    
+    # Cross-sectional demean (predict relative performance)
+    df[target_col] = df.groupby("date")[target_col].transform(lambda x: x - x.mean())
+    
+    return df.dropna(subset=[target_col])
 
 
+def split_by_date(panel: pd.DataFrame, split_date: str, target_window: int = 21):
+    """Complete data preparation pipeline."""
+    
+    # 1. Create features
+    df = make_features(panel)
+    
+    # 2. Add target
+    df = add_target(df, window=target_window)
+    
+    # 3. Define feature columns (exclude non-features)
+    exclude_cols = {'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close',
+                    'price', 'log_price', 'ret_1d', 'target', 'rsi_14', 'atr_14'}
+    feature_cols = [c for c in df.columns if c not in exclude_cols]
+    
+    # 4. Shift features to avoid look-ahead bias
+    df[feature_cols] = df.groupby("ticker")[feature_cols].shift(1)
+    
+    # 5. Drop NaN rows
+    df = df.dropna(subset=feature_cols + ['target'])
+    
+    # 6. Split by date
+    split_dt = pd.Timestamp(split_date)
+    dates = df.index.get_level_values("date")
+    train = df[dates <= split_dt].copy()
+    test = df[dates > split_dt].copy()
+    
+    return train, test, feature_cols
